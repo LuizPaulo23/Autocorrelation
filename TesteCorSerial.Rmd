@@ -1,0 +1,313 @@
+---
+title: "Anotações: Correlação Serial e Teste de Breush-Godfrey"
+author: "Luiz Paulo T. Gonçalves"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: hpstr
+    highlight: github
+---
+# *Resumo* 
+
+O presente texto, diferente dos meus textos normalmente vinculados seja no Rpubs[[1]](https://rpubs.com/Luiz_Paulo23) ou no Medium[[2]](https://luizpaulotavaresgonalves.medium.com/), são anotações de algumas revisões que estava fazendo em séries temporais. Assim, talvez não seja estranho o leitor sentir em determinadas partes a ausência de uma explicação mais detalhada. De qualquer modo, com ausência ou sem ausência, busca-se no presente texto aplicar o teste de Breush-Godfrey (BG). 
+
+##  Bloco I: Regressão 
+
+Em linhas gerais, pode-se especificar um modelo de regressão tomando uma variável dependente $Y\in \Re$ dado um vetor $x = (x_{1},...,x_{d}) \in \Re^d$: 
+
+$$
+y(x):= E[Y|X = x]
+$$
+De forma simplificada, em regressão linear simples, pode-se adotar a notação "padrão": 
+
+$$
+Y_{i} = \beta_{1}+\beta_{2}X_{i}+\mu_{i}
+$$
+Estimando a relação, temos: 
+
+$$
+Y_{i} = \hat{\beta_{1}}+{\hat{\beta_{2}}X_{i}}+{\hat{\mu}_{i}}
+$$
+$$
+= {\hat{Y}_{i}}+{\hat{\mu}_{i}}
+$$
+E, finalmente, chegamos nos resíduos. Diga-se de passagem, representam simplesmente as diferenças entre valores observados e estimados: 
+
+$$
+{\hat{\mu}_{i}} = {Y} - {\hat{Y_{i}}}
+$$
+$$
+= Y_{i} - {\hat{\beta}_{1}}-{\hat{\beta}_{2}X_{i}}
+$$
+
+Do exposto, desenvolve-se por consequência a busca por encontrar ou, melhor, minimizar os resíduos encontrando valores próximos de $Y$ observado. Critério bem difundido na literatura, pelo menos desde Friedrich Gauss, é o método dos mínimos quadrados. O qual, como suguere, busca minimizar os resíduos (GUJARATI & PORTER, 2011). Tomando como ponto de partida: 
+
+$$
+{\sum \mu^2_{i}} = \sum(Y_i - {\hat{Y_{i}}})^2
+$$
+$$
+= \sum(Y_i - {\hat{\beta_{1}}}-{\hat{\beta}_{2}}X_{i})^2
+$$
+Ou seja, a soma da diferença dos valores observados e estimados elevados ao quadrado. 
+
+## Correlação Serial e Teste de Breush-Godfrey 
+
+Pensando principalmente nos modelos no formato de séries temporais (ver, BUENO, 2008), um dos pressupostos fundametais assumidos é a ausência de correlação serial. Como bem coloca Ferreira (2021): 
+
+_Os termos de erro são independentes (condionalmente a $X$)_
+
+$$Cov(\mu_{t}, \mu_{t-s}|X) = 0 \space \space \space \space \space \space \space \space \space \space \space s = 1,2,...T-1$$ 
+O teste de Breusch-Godfrey (BG), para além do teste de Durbin-Watson, permite a inclusão de variáveis explicativas defasadas e testar correlações de ordem $p$, isto é, $p > 1$. Com a hipótese nula que os erros são ruídos brancos, caso não rejeitada, então, os resíduos obtidos pela estimativa via MQO são independentes dos resíduos defasados ${\hat \mu_{t-1},...,{\hat \mu_{t-s}}}$
+
+Desse modo para testar a presença de correlação serial de ordem p o teste de Breush-Godfrey segue:
+
+$$
+{\hat \mu_{t} = \gamma_1 {\hat \mu_{t-1}}+...+\gamma_p {\hat \mu_{t-p}}+\beta_0 + \beta_1 X_{1,t}+\beta_{2}X_{2,t}+...+\beta_{k} X_{k,t}+v_{t}}
+$$
+
+No qual parte dos resíduos do modelo estimado e, por sua vez, $v_t$ representa o erro. Assim, a estatística de teste é calculada como: 
+
+$$
+BG(p) = (T-p)R^2
+$$
+
+## Bloco II - Gerando as séries temporais 
+
+Bem, inicia-se gerando as séries. Vou simular duas séries com 100 observações apenas para aplicar o teste BG posteriormente. As séries vão partir de um Random Walk: 
+
+$$
+Y_{t} = \gamma + y_{t-1}+\mu_{t}
+$$
+
+$$
+y_t = \gamma_t + \sum_{j=1}^t \mu_t
+$$
+Onde a constante $\gamma$ é chamada de drift, e quando $\gamma = 0$, classifica-se simplesmente de random walk[[3]](https://rpubs.com/RobsonOL/series_temporais_r). Vou optar em configurar um $\gamma = 0.1$
+
+```{r message= F, warning=F}
+rm(list = ls()) # Limpando a memória 
+
+# Bibliotecas 
+
+library(tidyverse) # Manipulação 
+library(DataExplorer) # Análise Exploratória
+library(forecast) # Time Series 
+library(plotly) # Plotes interativos 
+library(TSstudio) # Time Series 
+library(cowplot) # Junção de plotes
+library(GGally) # Matriz de Correlação  
+library(stargazer) # Tables
+library(performance) # Testar os resíduos 
+library(nortest) # Teste de Normalidade 
+library(equatiomatic) # equações dos modelos
+library(lmtest) # Teste correlação serial 
+```
+
+
+```{r}
+# Gerando as séries temporais 
+set.seed(123) # Semente geradora pseudo-aleatória 
+
+white.noise  = rnorm(100, mean = 0, sd = 1)
+drift = white.noise + 0.1 # Adicionando o drift 
+random.walk = cumsum(white.noise) # Random Walk 
+walk.drift = cumsum(drift) # Random Walk com drift 
+
+data.time <- data.frame(random.walk, walk.drift) # Passando para um data.frame 
+
+time.series = ts(data = data.time, 
+                 start = 1, 
+                 end = 100, 
+                 frequency = 1) # Passando para série temporal
+```
+
+A seguir pode-se visualizar ambas sérias temporais em um plote: 
+
+```{r}
+# Visualizando as séries temporais
+
+data.time %>% 
+  ggplot(aes(x = 1:100)) + 
+  geom_line(aes(y = random.walk, color = "Random Walk")) +
+  geom_line(aes(y = walk.drift, color = "Random Walk com Drift")) +
+  labs(x = "Tempo", y = "",
+       title = "Random Walk",
+       color = "Comportamento:", 
+       caption = "Elaboração de Luiz Paulo T. Gonçalves")+
+  theme(legend.position = "bottom")
+```
+
+Feito isso, vamos observar a relação entre as séries com uma simples correlação de Pearson. Porém, antes vejamos a distribuição de ambas as séries. Vou jogar ambas as séries no teste de Shapiro-Wilk e no teste Anderson-Darling com uma estrutura de repetição (para não ficar com repetições de código, verbosidade): 
+
+```{r}
+for (feature in data.time) {
+  sw <- shapiro.test(feature)
+  ad <- ad.test(feature)
+  print(sw)
+  print(ad)
+}
+```
+
+Como pode ser observado, ambas as séries rejeitam a hipótese de normalidade. Agora podemos passar adiante, para nossa correlação que além de violar o pressuposto de distribuição gaussiana tem tudo para ser uma correlação espúria entre séries com raiz unitária, mas... continuemos para aplicar o teste de correlação serial. A correlação de Pearson pode ser dada como segue:
+
+$$
+r = \frac{\sum_{i=1}^n(x_i - {\overline{x}})(y_i - {\overline{x}})}{\sqrt{\sum_{i=1}^n(x_i-\overline{x})^2}\sqrt{\sum_{i=1}^n(y_{i}-\overline{y})^2}}
+$$
+Assim temos: 
+
+```{r message=F, warning=F}
+# Relação Bivariada - Correlação de Pearson 
+
+ggpairs(data.time, 
+        lower = list(continuos = "cor"))+
+  ggtitle("Correlação de Pearson")+
+  theme_bw()
+```
+
+Nota-se uma correlação alta e positivamente relacionada entre as variáveis geradas.Diga-se de passagem, nesse texto [[4]](https://medium.com/p/77badc06d463) tenho uma explicação mais detalhada sobre correlação.  Bem, agora, vamos observar mais de perto em um par de plotes de dispersão: 
+
+```{r message=F, warning=F}
+# Relação Bivariada 
+
+linear <- ggplot2::ggplot(data = data.time, aes(
+  y = random.walk, x = walk.drift))+
+  geom_point(size = 1.5, pch = 19, col = "black")+
+  geom_smooth(method = "lm", col = "red", fill = "red")+
+  labs(title = "Com Ajustamento Linear via MQO",
+       y = "Random Walk", x = "Random Walk com drift")+
+  theme_bw()
+  
+local <- ggplot2::ggplot(data = data.time, aes(
+  y = random.walk, x = walk.drift))+
+  geom_point(size = 1.5, pch = 19, col = "black")+
+  geom_smooth(method = "loess", col = "red", fill = "red")+
+  labs(title = "Com Ajustamento Local",
+       y = "Random Walk", x = "Random Walk com drift")+
+theme_bw()  
+
+
+plot_grid(linear, local)  
+
+
+```
+
+# Bloco III - Estimando via MQO para testar a correlação Serial 
+
+Apenas com o intuito de extrair os resíduos para aplicar o teste de BG, em seguida estima-se uma relação linear entre as variáveis anteriormente expostas. Bem, feito esse aviso, vamos modelar a relação entre as duas variáveis por MQO: 
+
+$$
+Y_{i} = \beta_{1}+\beta_{2}X_{i}+\mu_{i}
+$$
+
+De forma muito simples, temos: 
+
+```{r}
+model.linear = lm(formula = random.walk~walk.drift, 
+                  data = data.time)
+
+extract_eq(model.linear) # Equação do modelo
+
+stargazer::stargazer(model.linear, 
+                     type = "text", 
+                     title = "Modelo Linear via MQO")
+
+```
+
+# Bloco IV - Testando os resíduos
+
+Agora, vamos testar os resíduos. Apesar dos resíduos estarem próximos de uma distribuição Gaussiana, para piorar, foram rejeitados no teste de Shapiro-Wilk. Não obstante, observe nos gráficos a seguir a proximidade de uma normal: 
+
+```{r message=F, warning=F}
+
+plot(check_distribution(model.linear)) 
+check_model(model.linear)
+
+data.time$residuals = data.frame(model.linear$residuals) # Passando os resíduos para o data.frame 
+shapiro.test(model.linear$residuals) # Aproxima de uma dist. Gaussiana
+
+par(mfrow = c(1,3))
+
+plot(model.linear, 4)
+plot(model.linear, 6)
+boxplot(data.time$residuals, 
+        main = "Boxplot dos Resíduos", 
+        xlab = "Index")
+```
+
+
+# Bloco V - Autocorrelação e Teste de Correlação Serial de BG 
+
+Como exposto por Costa [[2019]](https://rpubs.com/hudsonchavs/fac_facp), o coeficiente de correlação entre x e x no período passado (isto é, defasado em t-1) é denominado de autocorrelação de k-ésima ordem:
+
+$$
+rk = \frac{Cov (x_{t}, x_{t-k})}{\sqrt{Var(x_t, x_{t-k})}} = \frac{Cov(x_t, x_{t-k})}{Var (x_{t})} = \frac{\gamma_{k}}{\gamma_{0}}
+$$
+Um conjunto de autocorrelações rk formam um função de autocorrelação de xt. Autocorrelação segue de perto a correlação enunciada anteriormente, porém correlacionando a série com ela mesmo num dado período de defasagem. Tenho outro texto que escrevi aqui [[5]](https://medium.com/p/5f14a19d3fc) sobre autocorrelação. Assim, a autocorrelação amostral de k-ésima ordem de xt pode ser definida como:
+
+
+$$
+\hat{r}k = \frac{\sum_{t = k +1}^T (x_{t} - 
+\overline{x})(x_{t-k}-\overline{x})}{\sum_{t = 1}^T(x_t -\overline{x})^2}
+$$
+
+
+O qual pode ser visualizada em um correlograma. Por princípio:
+
+_Uma autocorrelação de primeira ordem (t-1) representa uma correlação com o período anterior (como, por exemplo, o PIB do terceiro trimestre com o segundo trimestre);_
+
+_Uma autocorrelação de segunda ordem (t-2) representa uma correlação com 2 unidades de tempo passado;_ 
+
+_E assim sucessivamente._
+
+Bem, assim, vamos testar a autocorrelação dos resíduos: 
+
+```{r}
+ggAcf(data.time$residuals, lag.max = 48, col = "red")+
+  ggtitle("Função de Autocorrelação -  Resíduos do modelo", 
+          subtitle = "Elaboração de Luiz Paulo T. Gonçalves")+
+  theme_bw()
+```
+
+Como pode ser observado, apesar da autocorrelação dos resíduos até o oitavo lag, há um decaimento em oscilação para o intervalo rejeitando autocorrelação para os lags seguintes. Deixe-me observar essa autocorrelação mais de perto, plotando a relação entre os resíduos com os resíduos defasados considerando igualmente 24 lags. 
+
+```{r}
+time.residuals = ts(data = data.time[, 3], 
+                 start = 1, 
+                 end = 100, 
+                 frequency = 1) 
+
+ts_lags(time.residuals, lags = 1:12)
+ts_lags(time.residuals, lags = 13:24)
+```
+
+Como mencionado anteriormente, basicamente há uma autocorrelação que vai se perdendo a partir do oitavo lag. Feito isso, finalmente, podemos aplicar o teste formal para correlação serial, isto é, o teste de BG. Assim temos: 
+
+```{r}
+bgtest(model.linear, order = 1)
+bgtest(model.linear, order = 2)
+```
+
+Com a hipótese nula de ausência de correlação serial, e assumindo 5% em nível de significância como de costume, o teste rejeita a hipótese nula, isto é, o teste de BG indica correlação serial (1º e 2º ordem). Vamos aplicar o teste de Durbin-Watson apenas para ver a compatibilidade dos resultados. O teste de Durbin pode ser tomado como: 
+
+$$
+d = \frac{\sum_{t=2}^T(\hat{\mu}-\hat{\mu_{t-1}})^2}{\sum_{t=1}^T \hat{\mu_{t}^2}}
+$$
+Assim temos: 
+
+```{r}
+dwtest(model.linear)
+```
+
+Como esperado, o teste de Durbin também rejeitou a hipótese nula de ausência de correlação serial. Assim, concluo o texto depois de muita enrolação 
+
+# Referência Bibliográfica 
+
+BUENO, R. L. Econometria de séries temporais. São Paulo: Cengage Learning, 2008.
+
+FERREIRA, G. C et. al. Análise de Séries Temporais em R: um curso introdutório. Atlas: FGV IBRE, 2021. 
+
+GUJARATI, D.;PORTER, D. Econometria Básica. 5.ed. Porto Alegre: AMGH, 2011.
+
+
+
+
